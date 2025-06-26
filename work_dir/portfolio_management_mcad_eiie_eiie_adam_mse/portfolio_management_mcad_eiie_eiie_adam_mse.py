@@ -20,7 +20,7 @@ agent = dict(
     policy_update_frequency=500)
 trainer = dict(
     type='PortfolioManagementEIIETrainer',
-    epochs=2,
+    epochs=10,
     work_dir='work_dir/portfolio_management_mcad_eiie_eiie_adam_mse',
     if_remove=False)
 loss = dict(type='MSELoss')
