@@ -1,5 +1,9 @@
 Flask
 Flask-Cors
+torch==1.13.1
+torchvision==0.14.1
+numpy==1.24.3
+yapf==0.40.1
 mmcv==1.7.1
 git+https://github.com/optuna/optuna.git
 prettytable
@@ -15,7 +19,7 @@ matplotlib
 statsmodels
 scikit_learn
 tslearn
-gym
+gym==0.17.3
 gymnasium
 ray[rllib]==1.13.0
 tensorflow==2.11.0
