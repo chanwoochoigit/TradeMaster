@@ -1,5 +1,0 @@
-agg
-dbc
-gld
-qqq
-spy
