@@ -1,0 +1,31 @@
+{
+  "pipeline_run": {
+    "timestamp": "2025-07-10T23:31:32.069712",
+    "quick_test_mode": false,
+    "num_episodes": 200,
+    "max_training_hours": 6
+  },
+  "results": {
+    "setup": "3/3",
+    "training": "0/3",
+    "export": "0/3",
+    "overall": "0/3"
+  },
+  "regimes": {
+    "covid": {
+      "setup": true,
+      "training": false,
+      "export": false
+    },
+    "trade_war": {
+      "setup": true,
+      "training": false,
+      "export": false
+    },
+    "trade_war_i": {
+      "setup": true,
+      "training": false,
+      "export": false
+    }
+  }
+}

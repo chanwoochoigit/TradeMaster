@@ -75,6 +75,7 @@ class PortfolioManagementSARLTrainer(Trainer):
         self.trainer_name = select_algorithms(self.agent_name)
         self.configs["env"] = PortfolioManagementSARLEnvironment
         self.configs["env_config"] = dict(dataset=self.dataset, task="train")
+        self.configs["disable_env_checking"] = True  # Disable environment checking due to NumPy compatibility issues
         self.verbose = get_attr(kwargs, "verbose", False)
 
         self.init_before_training()

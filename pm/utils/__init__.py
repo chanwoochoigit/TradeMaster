@@ -12,3 +12,4 @@ from .plot import plot_metrics
 from .helpers import get_action_wrapper
 from .helpers import forward_action_wrapper
 from .helpers import get_action_logprob_wrapper
+from .export import export_allocation_history
