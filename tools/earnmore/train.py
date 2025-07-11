@@ -1,4 +1,5 @@
 import warnings
+
 warnings.filterwarnings("ignore")
 import os
 import sys
@@ -29,7 +30,8 @@ from pm.utils import find_latest_checkpoint
 from pm.utils import print_table
 from pm.utils import plot_metrics
 
-def init_before_training(seed = 3407):
+
+def init_before_training(seed=3407):
     random.seed(seed)
     torch.cuda.manual_seed(seed)
     torch.cuda.manual_seed_all(seed)
@@ -39,31 +41,42 @@ def init_before_training(seed = 3407):
     torch.backends.cudnn.deterministic = True
     torch.set_default_dtype(torch.float32)
 
+
 def make_env(env_id, env_params):
     def thunk():
         env = gym.make(env_id, **env_params)
         return env
+
     return thunk
 
+
 def parse_args():
-    parser = argparse.ArgumentParser(description='PM train script')
-    parser.add_argument("--config", default=os.path.join(ROOT, "configs", "earnmore","sac_portfolio_management.py"), help="config file path")
+    parser = argparse.ArgumentParser(description="PM train script")
     parser.add_argument(
-        '--cfg-options',
-        nargs='+',
+        "--config",
+        default=os.path.join(
+            ROOT, "configs", "earnmore", "sac_portfolio_management.py"
+        ),
+        help="config file path",
+    )
+    parser.add_argument(
+        "--cfg-options",
+        nargs="+",
         action=DictAction,
-        help='override some settings in the used config, the key-value pair '
-        'in xxx=yyy format will be merged into config file. If the value to '
+        help="override some settings in the used config, the key-value pair "
+        "in xxx=yyy format will be merged into config file. If the value to "
         'be overwritten is a list, it should be like key="[a,b]" or key=a,b '
         'It also allows nested list/tuple values, e.g. key="[(a,b),(c,d)]" '
-        'Note that the quotation marks are necessary and that no white space '
-        'is allowed.')
+        "Note that the quotation marks are necessary and that no white space "
+        "is allowed.",
+    )
     parser.add_argument("--root", type=str, default=ROOT)
     parser.add_argument("--workdir", type=str, default="workdir")
     parser.add_argument("--tag", type=str, default=None)
     parser.add_argument("--if_remove", action="store_true", default=True)
     args = parser.parse_args()
     return args
+
 
 def main():
 
@@ -97,34 +110,52 @@ def main():
     dataset = DATASET.build(cfg.dataset)
 
     print(50 * "-" + "build train enviroment" + "-" * 50)
-    cfg.environment.update(dict(
-        mode = "train",
-        if_norm = True,
-        dataset = dataset,
-        start_date = cfg.train_start_date,
-        end_date = cfg.val_start_date
-    ))
+    cfg.environment.update(
+        dict(
+            mode="train",
+            if_norm=True,
+            dataset=dataset,
+            start_date=cfg.train_start_date,
+            end_date=cfg.val_start_date,
+        )
+    )
     train_environment = ENVIRONMENT.build(cfg.environment)
     train_envs = gym.vector.SyncVectorEnv(
-        [make_env("PortfolioManagement-v0",
-                  env_params=dict(env = deepcopy(train_environment),
-                                  transition_shape = cfg.transition_shape, seed = cfg.seed + i)) for i in range(cfg.num_envs)]
+        [
+            make_env(
+                "PortfolioManagement-v0",
+                env_params=dict(
+                    env=deepcopy(train_environment),
+                    transition_shape=cfg.transition_shape,
+                    seed=cfg.seed + i,
+                ),
+            )
+            for i in range(cfg.num_envs)
+        ]
     )
 
     print(50 * "-" + "build val enviroment" + "-" * 50)
-    cfg.environment.update(dict(
-        mode="val",
-        if_norm = True,
-        dataset = dataset,
-        scaler = train_environment.scaler,
-        start_date=cfg.val_start_date,
-        end_date=cfg.test_start_date
-    ))
+    cfg.environment.update(
+        dict(
+            mode="val",
+            if_norm=True,
+            dataset=dataset,
+            scaler=train_environment.scaler,
+            start_date=cfg.val_start_date,
+            end_date=cfg.test_start_date,
+        )
+    )
     val_environment = ENVIRONMENT.build(cfg.environment)
     val_envs = gym.vector.SyncVectorEnv(
-        [make_env("PortfolioManagement-v0",
-                  env_params=dict(env=deepcopy(val_environment),
-                                  transition_shape=cfg.transition_shape)) for i in range(len(val_environment.aux_stocks))]
+        [
+            make_env(
+                "PortfolioManagement-v0",
+                env_params=dict(
+                    env=deepcopy(val_environment), transition_shape=cfg.transition_shape
+                ),
+            )
+            for i in range(len(val_environment.aux_stocks))
+        ]
     )
 
     # print(50 * "-" + "build test enviroment" + "-" * 50)
@@ -144,21 +175,23 @@ def main():
     # )
 
     print(50 * "-" + "build agent" + "-" * 50)
-    cfg.agent.update(dict(device = device))
+    cfg.agent.update(dict(device=device))
     agent = AGENT.build(cfg.agent)
 
-    '''init agent.last_state'''
+    """init agent.last_state"""
     state = train_envs.reset()
-    state = torch.tensor(state, dtype=torch.float32, device = device).unsqueeze(0)
+    state = torch.tensor(state, dtype=torch.float32, device=device).unsqueeze(0)
     agent.last_state = state
 
-    '''init buffer'''
+    """init buffer"""
     buffer = ReplayBuffer(
-        buffer_size = cfg.buffer_size,
-        transition = cfg.transition,
-        transition_shape = cfg.transition_shape,
-        if_use_per = cfg.if_use_per,
-        device = torch.device("cuda") if torch.cuda.is_available() else torch.device("cpu")
+        buffer_size=cfg.buffer_size,
+        transition=cfg.transition,
+        transition_shape=cfg.transition_shape,
+        if_use_per=cfg.if_use_per,
+        device=(
+            torch.device("cuda") if torch.cuda.is_available() else torch.device("cpu")
+        ),
         # device=torch.device("cpu")
     )
 
@@ -174,7 +207,9 @@ def main():
         start_episode = load_checkpoint(agent, latest_path)
     else:
         start_episode = 0
-    print("start episode {}, end episode {}".format(start_episode + 1, cfg.num_episodes))
+    print(
+        "start episode {}, end episode {}".format(start_episode + 1, cfg.num_episodes)
+    )
 
     horizon_step = 0
     for episode in range(start_episode + 1, cfg.num_episodes + 1):
@@ -183,7 +218,9 @@ def main():
 
         ######################train######################
         print("Train Episode: [{}/{}]".format(episode, cfg.num_episodes))
-        train_stats, train_infos = train_one_episode(train_envs, buffer, agent, cfg.horizon_len)
+        train_stats, train_infos = train_one_episode(
+            train_envs, buffer, agent, cfg.horizon_len
+        )
 
         horizon_stats = train_stats["horizon_stats"]
         episode_stats = train_stats["episode_stats"]
@@ -195,10 +232,14 @@ def main():
         for k, v in episode_stats.items():
             writer.add_scalar("train/episode_{}".format(k), v, episode)
 
-        train_episode_stats_log = OrderedDict({
-            "episode": [episode],
-            **{f"train_{k}": ["{:04f}".format(v)] for k, v in episode_stats.items()},
-        })
+        train_episode_stats_log = OrderedDict(
+            {
+                "episode": [episode],
+                **{
+                    f"train_{k}": ["{:04f}".format(v)] for k, v in episode_stats.items()
+                },
+            }
+        )
         episode_stats_log.update(train_episode_stats_log)
         infos.update(train_infos)
 
@@ -225,10 +266,12 @@ def main():
         for k, v in episode_stats.items():
             writer.add_scalar("val/episode_{}".format(k), v, episode)
 
-        val_episode_log_stats = OrderedDict({
-            "episode": [episode],
-            **{f"val_{k}": ["{:04f}".format(v)] for k, v in episode_stats.items()},
-        })
+        val_episode_log_stats = OrderedDict(
+            {
+                "episode": [episode],
+                **{f"val_{k}": ["{:04f}".format(v)] for k, v in episode_stats.items()},
+            }
+        )
         episode_stats_log.update(val_episode_log_stats)
         infos.update(val_infos)
 
@@ -256,11 +299,11 @@ def main():
         # print(table)
         # ###################################################
 
-        with pathmgr.open(os.path.join(exp_path, "train_log.txt"),"a") as op:
+        with pathmgr.open(os.path.join(exp_path, "train_log.txt"), "a") as op:
             op.write(json.dumps(episode_stats_log) + "\n")
 
-        with pathmgr.open(os.path.join(exp_path, "train_infos.txt"),"a") as op:
-            op.write(json.dumps(infos) + "\n")
+        with pathmgr.open(os.path.join(exp_path, "train_infos.txt"), "a") as op:
+            op.write(json.dumps(convert_for_json(infos)) + "\n")
 
     # max_episode = load_checkpoint(agent, os.path.join(exp_path, "best.pth"))
     # print("Test Max Episode: [{}/{}]".format(max_episode, cfg.num_episodes))
@@ -281,6 +324,7 @@ def main():
     #
     # # plot metrics
     # plot_metrics(exp_path)
+
 
 def train_one_episode(environment, buffer, agent, horizon_len):
 
@@ -312,7 +356,7 @@ def train_one_episode(environment, buffer, agent, horizon_len):
         for k, v in logging_tuple.items():
             stats["horizon_stats"].setdefault("{}".format(k), []).append(v)
 
-        if min_row_index < horizon_len - 1: # done is True in dones
+        if min_row_index < horizon_len - 1:  # done is True in dones
             break
 
     # update episode stats
@@ -320,6 +364,7 @@ def train_one_episode(environment, buffer, agent, horizon_len):
         stats["episode_stats"][k] = np.mean(v)
 
     return stats, infos
+
 
 def validate(environment, agent):
     stats = {
@@ -334,5 +379,24 @@ def validate(environment, agent):
 
     return stats, infos
 
-if __name__ == '__main__':
+
+def convert_for_json(obj):
+    """Convert numpy arrays and other non-JSON serializable objects to JSON serializable format"""
+    if isinstance(obj, np.ndarray):
+        return obj.tolist()
+    elif isinstance(obj, np.integer):
+        return int(obj)
+    elif isinstance(obj, np.floating):
+        return float(obj)
+    elif isinstance(obj, dict):
+        return {k: convert_for_json(v) for k, v in obj.items()}
+    elif isinstance(obj, list):
+        return [convert_for_json(item) for item in obj]
+    elif isinstance(obj, tuple):
+        return tuple(convert_for_json(item) for item in obj)
+    else:
+        return obj
+
+
+if __name__ == "__main__":
     main()
