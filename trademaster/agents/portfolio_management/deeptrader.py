@@ -18,7 +18,7 @@ from torch import Tensor
 from typing import Tuple
 
 def make_market_information(df, technical_indicator):
-    #based on the information, calculate the average for technical_indicator to present the market average
+    # based on the information, calculate the average for technical_indicator to present the market average
     all_dataframe_list = []
     index_list = df.index.unique().tolist()
     index_list.sort()
@@ -31,9 +31,7 @@ def make_market_information(df, technical_indicator):
         all_dataframe_list.append(new_dataframe)
     new_df = pd.DataFrame(all_dataframe_list,
                           columns=technical_indicator).values
-    # new_df.to_csv(store_path)
     return new_df
-
 
 def make_correlation_information(df: pd.DataFrame, feature="adjclose"):
     # based on the information, we are making the correlation matrix(which is N*N matric where N is the number of tickers) based on the specific
@@ -53,7 +51,7 @@ def make_correlation_information(df: pd.DataFrame, feature="adjclose"):
     dfcc = dfcc.values
     return dfcc
 
-def generate_portfolio(scores=torch.sigmoid(torch.randn(29, 1)), quantile=0.5):
+def generate_portfolio(scores=torch.sigmoid(torch.randn(5, 1)), quantile=0.5):
     scores = scores.squeeze()
     length = len(scores)
     if scores.equal(torch.ones(length)):
@@ -81,12 +79,20 @@ def generate_portfolio(scores=torch.sigmoid(torch.randn(29, 1)), quantile=0.5):
             good_portfolio.append(i)
             good_scores.append(score.unsqueeze(0))
     final_portfollio = [0] * length
-    good_scores = torch.cat(good_scores)
-    bad_scores = torch.cat(bad_scores)
-    good_portion = torch.exp(good_scores) / torch.sum(
-        torch.exp(good_scores)) * (quantile)
-    bad_portion = -torch.exp(1 - bad_scores) / torch.sum(
-        torch.exp(1 - bad_scores)) * (1 - quantile)
+    if len(good_scores) > 0:
+        good_scores = torch.cat(good_scores)
+        good_portion = torch.exp(good_scores) / torch.sum(
+            torch.exp(good_scores)) * (quantile)
+    else:
+        good_portion = torch.tensor([])
+    
+    if len(bad_scores) > 0:
+        bad_scores = torch.cat(bad_scores)
+        bad_portion = -torch.exp(1 - bad_scores) / torch.sum(
+            torch.exp(1 - bad_scores)) * (1 - quantile)
+    else:
+        bad_portion = torch.tensor([])
+    
     for i in range(length):
         if i in bad_portfolio:
             index = bad_portfolio.index(i)
@@ -106,7 +112,7 @@ def generate_rho(mean: torch.tensor, std: torch.tensor):
     normal = Normal(mean, std)
     result = normal.sample()
     if result <= 0:
-        result = torch.tensor(0)
+        result = torch.tensor(0.01)
     if result >= 1:
         result = torch.tensor(0.99)
     return result
@@ -151,6 +157,22 @@ class PortfolioManagementDeepTrader(AgentBase):
 
         self.policy_update_frequency = get_attr(kwargs, "policy_update_frequency", 500)
         self.critic_learn_time = 0
+        
+        # Initialize memory lists
+        self.s_memory_asset = []
+        self.a_memory_asset = []
+        self.r_memory_asset = []
+        self.sn_memory_asset = []
+        self.correlation_matrix = []
+        self.correlation_n_matrix = []
+        self.s_memory_market = []
+        self.a_memory_market = []
+        self.r_memory_market = []
+        self.sn_memory_market = []
+        self.roh_bars = []
+        self.roh_bar = 0.5  # Initialize roh_bar
+
+        self.last_state = None
 
     def get_save(self):
         models = {
@@ -170,6 +192,15 @@ class PortfolioManagementDeepTrader(AgentBase):
         return res
 
     def get_action(self, state, state_market, corr_matrix):
+        # Convert state from (assets, features, time) to (assets, time, features) for processing
+        if len(state.shape) == 3:
+            # state shape: (assets, features, time) -> (assets, time, features)
+            state = state.permute(0, 2, 1)
+        elif len(state.shape) == 4:
+            # state shape: (batch, assets, features, time) -> (assets, time, features)
+            batch_size, assets, features, time = state.shape
+            state = state[0].permute(0, 2, 1)  # FIXED: Use 3 indices for 3D tensor
+        
         asset_scores = self.act(state, corr_matrix)
         output_market = self.market(state_market)
         roh_bar = generate_rho(output_market[0].cpu(), output_market[1].cpu())
@@ -178,13 +209,14 @@ class PortfolioManagementDeepTrader(AgentBase):
         return action
 
     def explore_env(self, env, horizon_len: int) -> Tuple[Tensor, ...]:
-
+        # Fix tensor shapes - environment returns (action_dim, state_dim, time_steps)
+        # but we need (action_dim, time_steps, state_dim) for processing
         states = torch.zeros((horizon_len,
                               self.num_envs,
                               self.action_dim,
                               self.time_steps,
                               self.state_dim), dtype=torch.float32).to(self.device)
-        actions = torch.zeros((horizon_len, self.num_envs, self.action_dim + 1), dtype=torch.int32).to(self.device)  # different
+        actions = torch.zeros((horizon_len, self.num_envs, self.action_dim), dtype=torch.float32).to(self.device)
         rewards = torch.zeros((horizon_len, self.num_envs), dtype=torch.float32).to(self.device)
         dones = torch.zeros((horizon_len, self.num_envs), dtype=torch.bool).to(self.device)
         next_states = torch.zeros((horizon_len,
@@ -204,34 +236,30 @@ class PortfolioManagementDeepTrader(AgentBase):
                               self.state_dim), dtype=torch.float32).to(self.device)
         roh_bar_markets = torch.zeros((horizon_len, self.num_envs), dtype=torch.float32).to(self.device)
 
-        state = self.last_state  # last_state.shape = (state_dim, ) for a single env.
-
-        get_action = self.get_action
+        state = self.last_state
 
         for t in range(horizon_len):
             market_state = torch.from_numpy(make_market_information(env.data,
                            technical_indicator=env.tech_indicator_list)).unsqueeze(
                 0).float().to(self.device)
             corr_matrix = make_correlation_information(env.data)
-            action = get_action(state,market_state,corr_matrix)
-            print(action.shape)
-            exit()
+            action = self.get_action(state, market_state, corr_matrix)
+            
+            # Fix: Permute state from (assets, features, time) to (assets, time, features)
+            state_permuted = state.permute(0, 2, 1).unsqueeze(0)  # Add batch dim and permute
+            states[t] = state_permuted
 
-
-            action = get_action(state.unsqueeze(0))
-            states[t] = state
-
-            ary_action = action[0].detach().cpu().numpy()
+            ary_action = action  # action is already numpy array from get_action
             ary_state, reward, done, _ = env.step(ary_action)  # next_state
             state = torch.as_tensor(env.reset() if done else ary_state, dtype=torch.float32, device=self.device)
-            actions[t] = action
+            actions[t] = torch.tensor(action, dtype=torch.float32).to(self.device)
             rewards[t] = reward
             dones[t] = done
-            next_states[t] = state
+            next_states[t] = state.permute(0, 2, 1).unsqueeze(0)  # Fix next state too
 
         self.last_state = state
 
-        rewards *= self.reward_scale
+        rewards *= 2.0  # reward scale
         undones = 1.0 - dones.type(torch.float32)
 
         transition = self.transition(
@@ -239,21 +267,15 @@ class PortfolioManagementDeepTrader(AgentBase):
             action = actions,
             reward = rewards,
             undone = undones,
-            next_state = next_states
+            next_state = next_states,
+            correlation_matrix = correlation_matrixs,
+            next_correlation_matrix = next_correlation_matrixs,
+            state_market = state_markets,
+            roh_bar_market = roh_bar_markets
         )
         return transition
 
-    def store_transition(self, s_asset,
-                         a_asset,
-                         r,
-                         sn_asset,
-                         s_market,
-                         a_market,
-                         sn_market,
-                         A,
-                         A_n,
-                         roh_bar):  # 定义记忆存储函数 (这里输入为两套transition：asset和market)
-
+    def store_transition(self, s_asset, a_asset, r, sn_asset, s_market, a_market, sn_market, A, A_n, roh_bar):
         self.memory_counter = self.memory_counter + 1
         if self.memory_counter < self.memory_capacity:
             self.s_memory_asset.append(s_asset)
@@ -284,9 +306,20 @@ class PortfolioManagementDeepTrader(AgentBase):
             self.sn_memory_market[number - 1] = sn_market
             self.roh_bars[number - 1] = roh_bar
 
+    def compute_weights_train(self, asset_state, market_state, A):
+        # Same as compute_weights_test but for training
+        return self.compute_weights_test(asset_state, market_state, A)
+    
     def compute_weights_test(self, asset_state, market_state, A):
-        # use the mean to compute roh
         asset_state = torch.from_numpy(asset_state).float().to(self.device)
+        
+        # Fix tensor shape: convert (assets, features, time) to (assets, time, features)
+        if len(asset_state.shape) == 3:
+            asset_state = asset_state.permute(0, 2, 1)
+        elif len(asset_state.shape) == 4:
+            batch_size, assets, features, time = asset_state.shape
+            asset_state = asset_state[0].permute(0, 2, 1)  # FIXED: Use 3 indices
+        
         asset_scores = self.act(asset_state, A)
         input_market = torch.from_numpy(market_state).unsqueeze(0).to(
             torch.float32).to(self.device)
@@ -297,8 +330,11 @@ class PortfolioManagementDeepTrader(AgentBase):
         return weights
 
     def learn(self):
+        if len(self.s_memory_asset) < 10:
+            return  # Not enough samples to learn
+            
         length = len(self.s_memory_asset)
-        out1 = random.sample(range(length), int(length / 10))
+        out1 = random.sample(range(length), min(int(length / 10), 10))
         # random sample
         s_learn_asset = []
         a_learn_asset = []
@@ -327,10 +363,23 @@ class PortfolioManagementDeepTrader(AgentBase):
             roh_bar_market.append(self.roh_bars[number])
         self.critic_learn_time = self.critic_learn_time + 1
         # update the asset unit
-        # 除了correlation以外都是tensor correlation是np.array 直接从make_correlation_information返回即可
         for bs, ba, br, bs_, correlation, correlation_n in zip(
                 s_learn_asset, a_learn_asset, r_learn_asset, sn_learn_asset,
                 correlation_asset, correlation_asset_n):
+            
+            # Fix tensor shape handling in learning
+            if len(bs.shape) == 3:
+                bs = bs.permute(0, 2, 1)
+            elif len(bs.shape) == 4:
+                batch_size, assets, features, time = bs.shape
+                bs = bs[0].permute(0, 2, 1)  # FIXED: Use 3 indices
+                
+            if len(bs_.shape) == 3:
+                bs_ = bs_.permute(0, 2, 1)
+            elif len(bs_.shape) == 4:
+                batch_size, assets, features, time = bs_.shape
+                bs_ = bs_[0].permute(0, 2, 1)  # FIXED: Use 3 indices
+            
             # update actor
             a = self.act(bs, correlation)
             q = self.cri(bs, correlation, a)
@@ -343,15 +392,11 @@ class PortfolioManagementDeepTrader(AgentBase):
             q_ = self.cri(bs_, correlation_n, a_.detach())
             q_target = br + self.gamma * q_
             q_eval = self.cri(bs, correlation, ba.detach())
-            # print(q_eval)
-            # print(q_target)
-            td_error = self.loss(q_target.detach(), q_eval)
-            # print(td_error)
+            td_error = self.criterion(q_target.detach(), q_eval)
             self.cri_optimizer.zero_grad()
             td_error.backward()
             self.cri_optimizer.step()
-        # update the asset unit
-        # 除了correlation以外都是tensor correlation是np.array 直接从make_correlation_information返回即可
+        # update the market unit
         loss_market = 0
         for s, br, roh_bar in zip(s_learn_market, r_learn_asset,
                                   roh_bar_market):
@@ -363,4 +408,4 @@ class PortfolioManagementDeepTrader(AgentBase):
 
         self.market_optimizer.zero_grad()
         loss_market.backward()
-        self.market_optimizer.step()
+        self.market_optimizer.step() 

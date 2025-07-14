@@ -54,20 +54,27 @@ class PortfolioManagementSARLEnvironment(Environments):
 
         ##############################################################
         from trademaster.nets import mLSTMClf
-        self.network_dict = torch.load(get_attr(pretrained, "sarl_encoder", None))
-        self.net = mLSTMClf(n_features = len(self.tech_indicator_list), layer_num = 1, n_hidden = 128, tic_number = len(self.tic_list)).cuda()
-        self.net.load_state_dict(self.network_dict)
+        self.device = torch.device('cuda' if torch.cuda.is_available() else 'cpu')
+        self.net = mLSTMClf(n_features = len(self.tech_indicator_list), layer_num = 1, n_hidden = 128, tic_number = len(self.tic_list)).to(self.device)
+        
+        # Always train from scratch - pretrained models are incompatible with MCAD multi-asset dataset
+        print("Training SARL from scratch (pretrained models incompatible with MCAD multi-asset dataset)...")
         ##############################################################
 
         self.action_space = spaces.Box(low=-5,
                                        high=5,
                                        shape=(self.action_space_shape,))
 
+        # Calculate observation space dimensions
+        obs_dim = (len(self.tech_indicator_list) + 1) * self.state_space_shape
+        print(f"SARL Environment - Observation space dimension: {obs_dim}")
+        print(f"Tech indicators: {len(self.tech_indicator_list)}, State space: {self.state_space_shape}")
+        
         self.observation_space = spaces.Box(
             low=-np.inf,
             high=np.inf,
-            shape=((len(self.tech_indicator_list) + 1) *
-                   self.state_space_shape,))
+            shape=(obs_dim,),
+            dtype=np.float32)
 
         self.data = self.df.loc[self.day, :]
         tic_list = list(self.data.tic)
@@ -84,11 +91,11 @@ class PortfolioManagementSARLEnvironment(Environments):
                 df_information).float().unsqueeze(0)
             X.append(df_information)
         X = torch.cat(X, dim=0)
-        X = X.unsqueeze(0).cuda()
+        X = X.unsqueeze(0).to(self.device)
         y = self.net(X)
         y = y.cpu().detach().squeeze().numpy()
         y = y.tolist()
-        self.state = np.array(s_market + y)
+        self.state = np.array(s_market + y, dtype=np.float32)
         self.terminal = False
         self.portfolio_value = self.initial_amount
         self.asset_memory = [self.initial_amount]
@@ -99,7 +106,10 @@ class PortfolioManagementSARLEnvironment(Environments):
         self.transaction_cost_memory = []
         self.test_id = 'agent'
 
-    def reset(self):
+    def reset(self, *, seed=None, options=None):
+        if seed is not None:
+            np.random.seed(seed)
+            
         self.asset_memory = [self.initial_amount]
         self.day = self.length_day
         self.data = self.df.loc[self.day, :]
@@ -118,10 +128,10 @@ class PortfolioManagementSARLEnvironment(Environments):
                 df_information).float().unsqueeze(0)
             X.append(df_information)
         X = torch.cat(X, dim=0)
-        X = X.unsqueeze(0).cuda()
+        X = X.unsqueeze(0).to(self.device)
         y = self.net(X)
         y = y.cpu().detach().squeeze().numpy().tolist()
-        self.state = np.array(s_market + y)
+        self.state = np.array(s_market + y, dtype=np.float32)
         self.terminal = False
         self.portfolio_value = self.initial_amount
         self.asset_memory = [self.initial_amount]
@@ -175,7 +185,7 @@ class PortfolioManagementSARLEnvironment(Environments):
                     pickle.dump(save_dict, handle, protocol=pickle.HIGHEST_PROTOCOL)
 
 
-            return self.state, self.reward, self.terminal, {
+            return self.state, self.reward, self.terminal, False, {
                 "sharpe_ratio": sharpe_ratio,"total_assets": assets,'table':table
             }
         else:
@@ -202,7 +212,7 @@ class PortfolioManagementSARLEnvironment(Environments):
                     df_information).float().unsqueeze(0)
                 X.append(df_information)
             X = torch.cat(X, dim=0)
-            X = X.unsqueeze(0).cuda()
+            X = X.unsqueeze(0).to(self.device)
             y = self.net(X)
             y = y.cpu().detach().squeeze().numpy().tolist()
             self.state = np.array(s_market + y)
@@ -239,7 +249,7 @@ class PortfolioManagementSARLEnvironment(Environments):
             self.asset_memory.append(new_portfolio_value)
             self.reward = self.reward
 
-        return self.state, self.reward, self.terminal, {"weights_brandnew":weights_brandnew}
+        return self.state, self.reward, self.terminal, False, {"weights_brandnew":weights_brandnew}
 
     def normalization(self, actions):
         # a normalization function not only for actions to transfer into weights but also for the weights of the

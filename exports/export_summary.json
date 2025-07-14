@@ -1,0 +1,49 @@
+{
+  "export_timestamp": "2025-07-14T01:35:13.022248",
+  "models_exported": [
+    "mask_sac"
+  ],
+  "regimes_exported": [
+    "trade_war"
+  ],
+  "results": {
+    "trade_war": {
+      "mask_sac": {
+        "status": "success",
+        "datasets": {
+          "train": {
+            "records": 3576,
+            "date_range": "2006-10-17 to 2020-12-30"
+          },
+          "val": {
+            "records": 606,
+            "date_range": "2021-01-04 to 2023-05-31"
+          },
+          "test": {
+            "records": 500,
+            "date_range": "2023-06-01 to 2025-05-29"
+          }
+        },
+        "combined_file": {
+          "file": "trade_war/mask_sac.csv",
+          "total_records": 4682,
+          "columns": [
+            "date",
+            "dataset",
+            "spy",
+            "qqq",
+            "dbc",
+            "agg",
+            "gld",
+            "cash"
+          ],
+          "datasets_included": [
+            "train",
+            "val",
+            "test"
+          ]
+        }
+      }
+    }
+  }
+}

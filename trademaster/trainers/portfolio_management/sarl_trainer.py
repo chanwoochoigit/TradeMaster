@@ -26,23 +26,28 @@ def env_creator(env_name):
 def select_algorithms(alg_name):
     alg_name = alg_name.upper()
     if alg_name == "A2C":
-        from ray.rllib.agents.a3c.a2c import A2CTrainer as trainer
+        from ray.rllib.algorithms.a3c.a2c import A2CConfig
+        return A2CConfig
     elif alg_name == "DDPG":
-        from ray.rllib.agents.ddpg.ddpg import DDPGTrainer as trainer
+        from ray.rllib.algorithms.ddpg.ddpg import DDPGConfig
+        return DDPGConfig
     elif alg_name == 'PG':
-        from ray.rllib.agents.pg import PGTrainer as trainer
+        from ray.rllib.algorithms.pg import PGConfig
+        return PGConfig
     elif alg_name == 'PPO':
-        from ray.rllib.agents.ppo.ppo import PPOTrainer as trainer
+        from ray.rllib.algorithms.ppo.ppo import PPOConfig
+        return PPOConfig
     elif alg_name == 'SAC':
-        from ray.rllib.agents.sac import SACTrainer as trainer
+        from ray.rllib.algorithms.sac import SACConfig
+        return SACConfig
     elif alg_name == 'TD3':
-        from ray.rllib.agents.ddpg.ddpg import TD3Trainer as trainer
+        from ray.rllib.algorithms.ddpg.td3 import TD3Config
+        return TD3Config
     else:
         ray.get(f.remote(alg_name))
         ray.get(f.remote(alg_name == "A2C"))
         ray.get(f.remote(type(alg_name)))
         raise NotImplementedError
-    return trainer
 
 logging.disable(logging.INFO)
 logging.disable(logging.WARNING)
@@ -72,8 +77,8 @@ class PortfolioManagementSARLTrainer(Trainer):
         self.if_remove = get_attr(kwargs, "if_remove", False)
         self.num_threads = int(get_attr(kwargs, "num_threads", 8))
 
-        self.trainer_name = select_algorithms(self.agent_name)
-        self.configs["env"] = PortfolioManagementSARLEnvironment
+        self.trainer_config = select_algorithms(self.agent_name)
+        self.configs["env"] = "portfolio_management_sarl"
         self.configs["env_config"] = dict(dataset=self.dataset, task="train")
         self.configs["disable_env_checking"] = True  # Disable environment checking due to NumPy compatibility issues
         self.verbose = get_attr(kwargs, "verbose", False)
@@ -112,7 +117,35 @@ class PortfolioManagementSARLTrainer(Trainer):
 
         valid_score_list = []
         save_dict_list = []
-        self.trainer = self.trainer_name(env="portfolio_management_sarl", config=self.configs)
+        
+        # Build the algorithm using the new Ray API
+        config = self.trainer_config()
+        
+        # Create a temporary environment to get observation and action spaces
+        temp_env_config = dict(dataset=self.dataset, task="train")
+        temp_env = env_creator("portfolio_management_sarl")(temp_env_config)
+        obs_space = temp_env.observation_space
+        action_space = temp_env.action_space
+        
+        # Set environment configuration with explicit spaces
+        env_config = dict(dataset=self.dataset, task="train")
+        config = config.environment(
+            env="portfolio_management_sarl", 
+            env_config=env_config, 
+            observation_space=obs_space,
+            action_space=action_space,
+            disable_env_checking=True
+        )
+        
+        # Set framework
+        if "framework" in self.configs:
+            config = config.framework(self.configs["framework"])
+        
+        # Set rollout workers
+        if "num_workers" in self.configs:
+            config = config.rollouts(num_rollout_workers=self.configs["num_workers"])
+        
+        self.trainer = config.build()
 
         for epoch in range(1, self.epochs+1):
             ray.get(f.remote("Train Episode: [{}/{}]".format(epoch, self.epochs)))
@@ -147,7 +180,28 @@ class PortfolioManagementSARLTrainer(Trainer):
         ray.shutdown()
 
     def test(self):
-        self.trainer = self.trainer_name(env="portfolio_management_sarl", config=self.configs)
+        # Build the algorithm using the new Ray API
+        config = self.trainer_config()
+        
+        # Create a temporary environment to get observation and action spaces
+        temp_env_config = dict(dataset=self.dataset, task="test")
+        temp_env = env_creator("portfolio_management_sarl")(temp_env_config)
+        obs_space = temp_env.observation_space
+        action_space = temp_env.action_space
+        
+        env_config = dict(dataset=self.dataset, task="test")
+        config = config.environment(
+            env="portfolio_management_sarl", 
+            env_config=env_config,
+            observation_space=obs_space,
+            action_space=action_space
+        )
+        if "framework" in self.configs:
+            config = config.framework(self.configs["framework"])
+        if "num_workers" in self.configs:
+            config = config.rollouts(num_rollout_workers=self.configs["num_workers"])
+        
+        self.trainer = config.build()
 
         obj = load_object(os.path.join(self.checkpoints_path, "best.pkl"))
         self.trainer.restore_from_object(obj)
@@ -179,7 +233,28 @@ class PortfolioManagementSARLTrainer(Trainer):
         df.to_csv(os.path.join(self.work_dir, "test_result.csv"), index=False)
 
     def dynamics_test(self,test_dynamic,cfg):
-        self.trainer = self.trainer_name(env="portfolio_management_sarl", config=self.configs)
+        # Build the algorithm using the new Ray API
+        config = self.trainer_config()
+        
+        # Create a temporary environment to get observation and action spaces
+        temp_env_config = dict(dataset=self.dataset, task="test_dynamic")
+        temp_env = env_creator("portfolio_management_sarl")(temp_env_config)
+        obs_space = temp_env.observation_space
+        action_space = temp_env.action_space
+        
+        env_config = dict(dataset=self.dataset, task="test_dynamic")
+        config = config.environment(
+            env="portfolio_management_sarl", 
+            env_config=env_config,
+            observation_space=obs_space,
+            action_space=action_space
+        )
+        if "framework" in self.configs:
+            config = config.framework(self.configs["framework"])
+        if "num_workers" in self.configs:
+            config = config.rollouts(num_rollout_workers=self.configs["num_workers"])
+        
+        self.trainer = config.build()
         obj = load_object(os.path.join(self.checkpoints_path, "best.pkl"))
         self.trainer.restore_from_object(obj)
 

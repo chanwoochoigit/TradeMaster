@@ -56,6 +56,13 @@ class PortfolioManagementEIIEEnvironment(Environments):
         self.action_space_shape = self.stock_dim
         self.time_steps = time_steps
 
+        # For test tasks, load training data to fill initial rolling window
+        self.train_df = None
+        if self.task.startswith("test") or self.task.startswith("valid"):
+            train_path = get_attr(self.dataset, "train_path", None)
+            if train_path:
+                self.train_df = pd.read_csv(train_path, index_col=0)
+
         self.action_space = spaces.Box(low=-5, high=5, shape=(self.action_space_shape,))
         self.observation_space = spaces.Box(
             low=-np.inf,
@@ -70,7 +77,15 @@ class PortfolioManagementEIIEEnvironment(Environments):
         self.action_dim = self.action_space.shape[0]
         self.state_dim = self.observation_space.shape[0]
 
-        self.data = self.df.loc[self.day - self.time_steps + 1 : self.day, :]
+        # Initialize state based on task type
+        if self.task.startswith("test") or self.task.startswith("valid"):
+            # For test/valid, start from day 0 but use training data for rolling window
+            self.day = 0
+            self.data = self._get_windowed_data(self.day)
+        else:
+            # For training, use original behavior
+            self.data = self.df.loc[self.day - self.time_steps + 1 : self.day, :]
+            
         self.state = np.array(
             [
                 [
@@ -91,9 +106,43 @@ class PortfolioManagementEIIEEnvironment(Environments):
         self.transaction_cost_memory = []
         self.test_id = "agent"
 
+    def _get_windowed_data(self, day):
+        """Get windowed data for a given day, using training data if needed for initial window"""
+        if self.task.startswith("train"):
+            # For training, use standard windowing
+            return self.df.loc[day - self.time_steps + 1 : day, :]
+        
+        # For test/valid tasks, fill initial window with training data if needed
+        if day < self.time_steps - 1:
+            # Need training data to fill the window
+            if self.train_df is None:
+                # Fallback to original behavior if no training data
+                return self.df.loc[max(0, day - self.time_steps + 1) : day, :]
+            
+            # Use last (time_steps - 1 - day) days from training data
+            # and first (day + 1) days from test data
+            train_days_needed = self.time_steps - 1 - day
+            train_data = self.train_df.tail(train_days_needed * self.stock_dim)
+            test_data = self.df.loc[0 : day, :]
+            
+            # Combine training and test data
+            combined_data = pd.concat([train_data, test_data], ignore_index=True)
+            return combined_data
+        else:
+            # Standard windowing for later days
+            return self.df.loc[day - self.time_steps + 1 : day, :]
+
     def reset(self):
-        self.day = self.time_steps - 1
-        self.data = self.df.loc[self.day - self.time_steps + 1 : self.day, :]
+        # Initialize based on task type
+        if self.task.startswith("test") or self.task.startswith("valid"):
+            # For test/valid, start from day 0 to include all test dates
+            self.day = 0
+            self.data = self._get_windowed_data(self.day)
+        else:
+            # For training, use original behavior
+            self.day = self.time_steps - 1
+            self.data = self.df.loc[self.day - self.time_steps + 1 : self.day, :]
+            
         # initially, the self.state's shape is stock_dim*len(tech_indicator_list)
         self.state = np.array(
             [
@@ -178,7 +227,7 @@ class PortfolioManagementEIIEEnvironment(Environments):
             self.weights_memory.append(weights)
             last_day_memory = self.df.loc[self.day, :]
             self.day += 1
-            self.data = self.df.loc[self.day - self.time_steps + 1 : self.day, :]
+            self.data = self._get_windowed_data(self.day)
             self.state = np.array(
                 [
                     [
@@ -316,7 +365,7 @@ class PortfolioManagementEIIEEnvironment(Environments):
         cr = np.sum(daily_return) / (mdd + 1e-10)
         sor = (
             np.sum(daily_return)
-            / (np.nan_to_num(np.std(neg_ret_lst), 0) + 1e-10)
+            / (np.nan_to_num(np.std(neg_ret_lst), nan=0, copy=True) + 1e-10)
             / (np.sqrt(len(daily_return)) + 1e-10)
         )
         return tr, sharpe_ratio, vol, mdd, cr, sor

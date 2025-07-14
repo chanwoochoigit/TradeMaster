@@ -1,24 +1,14 @@
 # base parameters (do not modify)
-import sys
-from pathlib import Path
-
-# Add project root to path for shared configs
-sys.path.insert(0, str(Path(__file__).parent.parent))
-from configs.regime_dates import get_regime_dates
-
-# Get regime-specific dates from shared configuration
-_regime_dates = get_regime_dates("trade_war")
-
 root = None
 workdir = "workdir"
 tag = "mask_sac_mcad_trade_war"
 num_stocks = 5  # MCAD has 5 stocks: spy, qqq, dbc, agg, gld
 num_envs = 1
 num_features = 20  # MCAD features (17 tech indicators + 3 temporals)
-temporal_dim = 3  # weekday, day, month
-train_start_date = _regime_dates["train_start"]
-val_start_date = _regime_dates["val_start"]
-test_start_date = _regime_dates["test_start"]
+temporal_dim = 3 # weekday, day, month
+train_start_date = "2006-09-06"
+val_start_date = "2021-01-01"
+test_start_date = "2023-06-01"
 test_end_date = None
 if_use_per = False
 if_use_rep = True
@@ -39,9 +29,9 @@ buffer_size = 4096
 horizon_len = 64
 embed_dim = 128
 decoder_embed_dim = 128
-depth = 1  # 1 transformer
+depth = 1 # 1 transformer
 decoder_depth = 1
-lr = 5e-5  # act_lr, cri_lr
+lr = 5e-5 # act_lr, cri_lr
 act_lr = 5e-5
 cri_lr = 5e-5
 rep_lr = 5e-5

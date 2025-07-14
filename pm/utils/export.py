@@ -139,13 +139,21 @@ def export_allocation_history(
         update_data_root(cfg, root=str(project_root))
 
         # Ensure dataset root is set correctly
-        if hasattr(cfg, "dataset") and isinstance(cfg.dataset, dict):
+        if hasattr(cfg, "data") and isinstance(cfg.data, dict):
+            cfg.data["root"] = str(project_root)
+        elif hasattr(cfg, "dataset") and isinstance(cfg.dataset, dict):
             cfg.dataset["root"] = str(project_root)
 
         device = torch.device("cuda" if torch.cuda.is_available() else "cpu")
 
         print("Building dataset...")
-        dataset = DATASET.build(cfg.dataset)
+        # Handle both 'data' (standard) and 'dataset' (masked SAC) config structures
+        if hasattr(cfg, 'data'):
+            dataset = DATASET.build(cfg.data)
+        elif hasattr(cfg, 'dataset'):
+            dataset = DATASET.build(cfg.dataset)
+        else:
+            raise AttributeError("Config must have either 'data' or 'dataset' attribute")
 
         print("Building environments...")
         # Create training environment to get the scaler
@@ -262,22 +270,25 @@ def export_allocation_history(
                 actions.cpu().numpy()
             )
 
-            # Store allocation (first environment only for single-asset-class case)
-            allocation_history.append(actions.cpu().numpy()[0].copy())
+            # Check if done BEFORE storing allocation to avoid duplicates
+            done = any(dones)
+            
+            # Only store allocation if not done
+            if not done:
+                # Store allocation (first environment only for single-asset-class case)
+                allocation_history.append(actions.cpu().numpy()[0].copy())
 
-            # Extract date from environment info
-            if infos and len(infos) > 0 and "date" in infos[0]:
-                date_history.append(infos[0]["date"])
-            else:
-                date_history.append(f"step_{step}")
+                # Extract date from environment info
+                if infos and len(infos) > 0 and "date" in infos[0]:
+                    date_history.append(infos[0]["date"])
+                else:
+                    date_history.append(f"step_{step}")
 
             # Update observations
             observations = torch.tensor(
                 next_observations, dtype=torch.float32, device=agent.device
             )
 
-            # Check if done
-            done = any(dones)
             step += 1
 
             if step % 100 == 0:

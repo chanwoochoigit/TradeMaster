@@ -20,7 +20,7 @@ class PortfolioManagementInvestorImitator(AgentBase):
     def __init__(self, **kwargs):
         super(PortfolioManagementInvestorImitator, self).__init__()
 
-        self.device = get_attr(kwargs, "device", None)
+        self.device = torch.device('cuda' if torch.cuda.is_available() else 'cpu')
 
         self.act = get_attr(kwargs, "act", None).to(self.device)
 
@@ -45,8 +45,39 @@ class PortfolioManagementInvestorImitator(AgentBase):
         return res
 
     def get_action(self, state):
-        state = torch.from_numpy(state).float().cuda()
-        probs = self.act(state)
+        state = torch.from_numpy(state).float().to(self.device)
+        
+        # DEBUG: Check for NaN/inf in input state
+        print(f"DEBUG: State shape: {state.shape}")
+        print(f"DEBUG: State min/max: {state.min():.6f}/{state.max():.6f}")
+        print(f"DEBUG: State values: {state.flatten()[:10]}")  # First 10 values
+        
+        if torch.isnan(state).any() or torch.isinf(state).any():
+            print(f"ERROR: State contains NaN/inf: {state}")
+            exit(1)
+            
+        # DEBUG: Check network weights
+        for name, param in self.act.named_parameters():
+            if torch.isnan(param).any() or torch.isinf(param).any():
+                print(f"ERROR: Network weights contain NaN/inf in {name}")
+                exit(1)
+        
+        logits = self.act(state)
+        
+        # DEBUG: Check for NaN/inf in network output
+        if torch.isnan(logits).any() or torch.isinf(logits).any():
+            print(f"ERROR: Network output contains NaN/inf: {logits}")
+            print(f"Logits shape: {logits.shape}")
+            exit(1)
+            
+        probs = torch.softmax(logits, dim=-1)
+        
+        # DEBUG: Check for NaN/inf in probabilities
+        if torch.isnan(probs).any() or torch.isinf(probs).any():
+            print(f"ERROR: Probabilities contain NaN/inf: {probs}")
+            print(f"Original logits: {logits}")
+            exit(1)
+            
         m = Categorical(probs)
         action = m.sample()
         self.act.saved_log_probs.append(m.log_prob(action))

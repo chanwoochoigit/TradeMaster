@@ -120,23 +120,61 @@ class EnvironmentPV(gym.Env):
                                                                                         self.features.shape[1]))
 
         self.num_days = self.features.shape[1]
+        
+        # Store training data for rolling window when in test/val mode
+        self.training_features = None
+        self.training_prices = None
+        if self.mode in ["val", "test"] and hasattr(self.dataset, 'training_features'):
+            self.training_features = self.dataset.training_features
+            self.training_prices = self.dataset.training_prices
 
         if self.mode == "train":
             self.day = random.randint(self.days - 1, 3 * (self.num_days // 4))
         else:
-            self.day = self.days - 1
+            # For test/val, start from day 0 to include ALL dates
+            self.day = 0
 
     def get_current_date(self):
         return self.stocks_df[0].index[self.day]
+
+    def _get_windowed_data(self, day, data_type='features'):
+        """Get windowed data for the given day, using training data if needed for rolling window"""
+        data = self.features if data_type == 'features' else self.prices
+        
+        start_idx = day - self.days + 1
+        end_idx = day + 1
+        
+        if start_idx >= 0:
+            # Normal case: all data is within current period
+            return data[:, start_idx:end_idx, :]
+        else:
+            # Need data from before current period - use training data if available
+            if self.training_features is not None and data_type == 'features':
+                # Combine training data (for missing days) with current data
+                training_data = self.training_features[:, start_idx:, :]  # Last |start_idx| days from training
+                current_data = data[:, 0:end_idx, :]  # First end_idx days from current
+                return np.concatenate([training_data, current_data], axis=1)
+            elif self.training_prices is not None and data_type == 'prices':
+                # Same for prices
+                training_data = self.training_prices[:, start_idx:, :]
+                current_data = data[:, 0:end_idx, :]
+                return np.concatenate([training_data, current_data], axis=1)
+            else:
+                # Fallback: pad with the first available data
+                needed_days = abs(start_idx)
+                first_day_data = data[:, 0:1, :]  # First day data
+                padding = np.tile(first_day_data, (1, needed_days, 1))  # Repeat first day
+                current_data = data[:, 0:end_idx, :]
+                return np.concatenate([padding, current_data], axis=1)
 
     def reset(self):
         if self.mode == "train":
             self.day = random.randint(self.days - 1, 3 * (self.num_days // 4))
         else:
-            self.day = self.days - 1
+            # For test/val, start from day 0 to include ALL dates
+            self.day = 0
 
-
-        state = self.features[:, self.day - self.days + 1: self.day + 1, :]
+        state = self._get_windowed_data(self.day, 'features')
 
         self.state = state
         self.protfolio_value = self.initial_amount
@@ -154,35 +192,43 @@ class EnvironmentPV(gym.Env):
         weights = action.flatten()
 
         pre_o, pre_h, pre_l, pre_c = self.get_prices()
+        
+        # Get the date for the current day BEFORE incrementing (this is the day the action applies to)
+        current_day_date = self.get_current_date()
 
-        self.day = self.day + 1
-
-        if self.day < self.num_days - 1:
-            done = False
-        else:
+        # Check if we're at the last day before incrementing
+        if self.day + 1 >= self.num_days:
             done = True
-
-        post_o, post_h, post_l, post_c = self.get_prices()
-
-        portfolio_ret = np.sum(((post_c - pre_c) / pre_c) * weights[1:])
-
-        # weights[0] is the cash, weights[1:] is the stocks
-        reward = (1- weights[0]) * self.protfolio_value * (1 + portfolio_ret) + \
-                 weights[0] * self.protfolio_value
+            # No portfolio return calculation - episode ends
+            portfolio_ret = 0.0
+            # Keep current portfolio value
+            reward = self.protfolio_value
+        else:
+            self.day = self.day + 1
+            done = False
+            post_o, post_h, post_l, post_c = self.get_prices()
+            
+            portfolio_ret = np.sum(((post_c - pre_c) / pre_c) * weights[1:])
+            
+            # weights[0] is the cash, weights[1:] is the stocks
+            reward = (1- weights[0]) * self.protfolio_value * (1 + portfolio_ret) + \
+                     weights[0] * self.protfolio_value
 
         self.protfolio_value = reward
-
-        date = self.get_current_date()
 
         info = {
             "state": state,
             "action": action,
             "portfolio_ret": portfolio_ret,
             "portfolio_value": self.protfolio_value,
-            "date": date
+            "date": current_day_date  # Use the date BEFORE incrementing
         }
 
-        next_state = self.features[:, self.day - self.days + 1: self.day + 1, :]
+        if done:
+            # For the final state, return the current state since we can't move forward
+            next_state = state
+        else:
+            next_state = self._get_windowed_data(self.day, 'features')
 
         self.state = next_state
 

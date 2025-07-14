@@ -1,0 +1,52 @@
+Config (path: configs/portfolio_management/portfolio_management_mcad_deeptrader_deeptrader_adam_mse_covid.py): {'data': {'type': 'PortfolioManagementDataset', 'data_path': 'data/portfolio_management/mcad/covid', 'train_path': 'data/portfolio_management/mcad/covid/train.csv', 'valid_path': 'data/portfolio_management/mcad/covid/valid.csv', 'test_path': 'data/portfolio_management/mcad/covid/test.csv', 'tech_indicator_list': ['high', 'low', 'open', 'close', 'adjcp', 'zopen', 'zhigh', 'zlow', 'zadjcp', 'zclose', 'zd_5', 'zd_10', 'zd_15', 'zd_20', 'zd_25', 'zd_30'], 'length_day': 10, 'initial_amount': 100000, 'transaction_cost_pct': 0.001, 'test_dynamic_path': 'data/portfolio_management/mcad/covid/test_with_label.csv', 'test_dynamic': '-1'}, 'environment': {'type': 'PortfolioManagementDeepTraderEnvironment'}, 'agent': {'type': 'PortfolioManagementDeepTrader', 'memory_capacity': 1000, 'gamma': 0.99, 'policy_update_frequency': 500}, 'trainer': {'type': 'PortfolioManagementDeepTraderTrainer', 'epochs': 200, 'work_dir': 'work_dir/portfolio_management_mcad_deeptrader_deeptrader_adam_mse_covid', 'if_remove': False}, 'loss': {'type': 'MSELoss'}, 'optimizer': {'type': 'Adam', 'lr': 0.001}, 'act_net': {'type': 'AssetScoringNet', 'N': None, 'K_l': None, 'num_inputs': None, 'num_channels': [12, 12, 12], 'kernel_size': 2, 'dropout': 0.2}, 'cri_net': {'type': 'AssetScoringValueNet', 'N': None, 'K_l': None, 'num_inputs': None, 'num_channels': [12, 12, 12], 'kernel_size': 2, 'dropout': 0.2}, 'market_net': {'type': 'MarketScoringNet', 'n_features': None, 'hidden_size': 12}, 'transition': {'type': 'Transition'}, 'task_name': 'portfolio_management', 'dataset_name': 'mcad', 'net_name': 'deeptrader', 'agent_name': 'deeptrader', 'optimizer_name': 'adam', 'loss_name': 'mse', 'regime_name': 'covid', 'work_dir': 'work_dir/portfolio_management_mcad_deeptrader_deeptrader_adam_mse_covid', 'act': {'type': 'AssetScoringNet', 'N': 5, 'K_l': 10, 'num_inputs': 16, 'num_channels': [12, 12, 12], 'kernel_size': 2, 'dropout': 0.2}, 'cri': {'type': 'AssetScoringValueNet', 'N': 5, 'K_l': 10, 'num_inputs': 16, 'num_channels': [12, 12, 12], 'kernel_size': 2, 'dropout': 0.2}, 'market': {'type': 'MarketScoringNet', 'n_features': 16, 'hidden_size': 12}}
+| Arguments Keep work_dir: /Users/chanwoo_choi/projects/TradeMaster/work_dir/portfolio_management_mcad_deeptrader_deeptrader_adam_mse_covid
+Traceback (most recent call last):
+  File "/Users/chanwoo_choi/projects/TradeMaster/tools/portfolio_management/train_deeptrader.py", line 147, in <module>
+    main()
+  File "/Users/chanwoo_choi/projects/TradeMaster/tools/portfolio_management/train_deeptrader.py", line 117, in main
+    trainer.train_and_valid()
+  File "/Users/chanwoo_choi/projects/TradeMaster/trademaster/trainers/portfolio_management/deeptrader_trainer.py", line 173, in train_and_valid
+    buffer_items = self.agent.explore_env(self.train_environment, self.horizon_len)
+  File "/Users/chanwoo_choi/projects/TradeMaster/trademaster/agents/portfolio_management/deeptrader.py", line 223, in explore_env
+    action = get_action(state,market_state,corr_matrix)
+  File "/Users/chanwoo_choi/projects/TradeMaster/trademaster/agents/portfolio_management/deeptrader.py", line 180, in get_action
+    asset_scores = self.act(state, corr_matrix)
+  File "/opt/anaconda3/envs/trademaster/lib/python3.9/site-packages/torch/nn/modules/module.py", line 1532, in _wrapped_call_impl
+    return self._call_impl(*args, **kwargs)
+  File "/opt/anaconda3/envs/trademaster/lib/python3.9/site-packages/torch/nn/modules/module.py", line 1541, in _call_impl
+    return forward_call(*args, **kwargs)
+  File "/Users/chanwoo_choi/projects/TradeMaster/trademaster/nets/deeptrader.py", line 221, in forward
+    H_L = self.TCN(x)
+  File "/opt/anaconda3/envs/trademaster/lib/python3.9/site-packages/torch/nn/modules/module.py", line 1532, in _wrapped_call_impl
+    return self._call_impl(*args, **kwargs)
+  File "/opt/anaconda3/envs/trademaster/lib/python3.9/site-packages/torch/nn/modules/module.py", line 1541, in _call_impl
+    return forward_call(*args, **kwargs)
+  File "/Users/chanwoo_choi/projects/TradeMaster/trademaster/nets/deeptrader.py", line 135, in forward
+    return self.network(x)
+  File "/opt/anaconda3/envs/trademaster/lib/python3.9/site-packages/torch/nn/modules/module.py", line 1532, in _wrapped_call_impl
+    return self._call_impl(*args, **kwargs)
+  File "/opt/anaconda3/envs/trademaster/lib/python3.9/site-packages/torch/nn/modules/module.py", line 1541, in _call_impl
+    return forward_call(*args, **kwargs)
+  File "/opt/anaconda3/envs/trademaster/lib/python3.9/site-packages/torch/nn/modules/container.py", line 217, in forward
+    input = module(input)
+  File "/opt/anaconda3/envs/trademaster/lib/python3.9/site-packages/torch/nn/modules/module.py", line 1532, in _wrapped_call_impl
+    return self._call_impl(*args, **kwargs)
+  File "/opt/anaconda3/envs/trademaster/lib/python3.9/site-packages/torch/nn/modules/module.py", line 1541, in _call_impl
+    return forward_call(*args, **kwargs)
+  File "/Users/chanwoo_choi/projects/TradeMaster/trademaster/nets/deeptrader.py", line 89, in forward
+    out = self.net(x)
+  File "/opt/anaconda3/envs/trademaster/lib/python3.9/site-packages/torch/nn/modules/module.py", line 1532, in _wrapped_call_impl
+    return self._call_impl(*args, **kwargs)
+  File "/opt/anaconda3/envs/trademaster/lib/python3.9/site-packages/torch/nn/modules/module.py", line 1541, in _call_impl
+    return forward_call(*args, **kwargs)
+  File "/opt/anaconda3/envs/trademaster/lib/python3.9/site-packages/torch/nn/modules/container.py", line 217, in forward
+    input = module(input)
+  File "/opt/anaconda3/envs/trademaster/lib/python3.9/site-packages/torch/nn/modules/module.py", line 1532, in _wrapped_call_impl
+    return self._call_impl(*args, **kwargs)
+  File "/opt/anaconda3/envs/trademaster/lib/python3.9/site-packages/torch/nn/modules/module.py", line 1582, in _call_impl
+    result = forward_call(*args, **kwargs)
+  File "/opt/anaconda3/envs/trademaster/lib/python3.9/site-packages/torch/nn/modules/conv.py", line 310, in forward
+    return self._conv_forward(input, self.weight, self.bias)
+  File "/opt/anaconda3/envs/trademaster/lib/python3.9/site-packages/torch/nn/modules/conv.py", line 306, in _conv_forward
+    return F.conv1d(input, weight, bias, self.stride,
+RuntimeError: Given groups=1, weight of size [12, 16, 2], expected input[16, 5, 10] to have 16 channels, but got 5 channels instead

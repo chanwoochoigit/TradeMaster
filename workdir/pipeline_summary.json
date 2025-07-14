@@ -1,31 +1,31 @@
 {
   "pipeline_run": {
-    "timestamp": "2025-07-10T23:31:32.069712",
+    "timestamp": "2025-07-14T01:35:13.429683",
     "quick_test_mode": false,
     "num_episodes": 200,
     "max_training_hours": 6
   },
   "results": {
     "setup": "3/3",
-    "training": "0/3",
-    "export": "0/3",
-    "overall": "0/3"
+    "training": "3/3",
+    "export": "3/3",
+    "overall": "3/3"
   },
   "regimes": {
+    "trade_war_i": {
+      "setup": true,
+      "training": true,
+      "export": true
+    },
     "covid": {
       "setup": true,
-      "training": false,
-      "export": false
+      "training": true,
+      "export": true
     },
     "trade_war": {
       "setup": true,
-      "training": false,
-      "export": false
-    },
-    "trade_war_i": {
-      "setup": true,
-      "training": false,
-      "export": false
+      "training": true,
+      "export": true
     }
   }
 }

@@ -10,11 +10,26 @@ This script provides a complete end-to-end pipeline for:
 4. Exporting allocation histories to CSV
 5. Generating summary reports
 
+Prerequisites:
+    - Install dependencies: pip install -r mask_sac_requirements.txt
+    - See MASK_SAC_SETUP.md for detailed setup instructions
+
 Usage:
-    python mask_sac_mcad_complete_pipeline.py [--quick-test]
+    # Run complete pipeline
+    python mask_sac_mcad_complete_pipeline.py
+
+    # Quick test mode (50 episodes instead of 200)
+    python mask_sac_mcad_complete_pipeline.py --quick-test
+
+    # Check training status
+    python mask_sac_mcad_complete_pipeline.py --check-status all
+    python mask_sac_mcad_complete_pipeline.py --check-status covid
 
 Options:
-    --quick-test: Run with reduced episodes for testing (50 instead of 1000)
+    --quick-test: Run with reduced episodes for testing (50 instead of 200)
+    --check-status: Check training status for specific regime or 'all'
+
+For troubleshooting and detailed setup instructions, see MASK_SAC_SETUP.md
 """
 
 import os
@@ -485,8 +500,8 @@ agent = dict(
 
         self.log(f"Starting training for {regime} regime", "PROGRESS")
 
-        # Start training
-        train_command = f"python tools/earnmore/train.py --config {config_path}"
+        # Start training (use trademaster environment python directly)
+        train_command = f"/opt/anaconda3/envs/trademaster/bin/python tools/earnmore/train.py --config {config_path}"
 
         try:
             # Start process with real-time output
@@ -680,33 +695,31 @@ agent = dict(
 
     def export_allocation_history(self, regime: str) -> bool:
         """Export allocation history for a trained regime"""
-        config_path = f"configs/earnmore/mask_sac_mcad_{regime}.py"
-
         self.log(f"Exporting allocation history for {regime}", "PROGRESS")
 
-        export_command = f"python tools/export_allocations.py --config {config_path}"
+        # Export ALL datasets (train+val+test) directly to the final location
+        export_command = f"/opt/anaconda3/envs/trademaster/bin/python tools/export_allocations.py --model mask_sac --regime {regime} --dataset all --output exports/{regime}/mask_sac.csv"
         result = self.run_command(
             export_command, f"Exporting allocation history for {regime}"
         )
 
         if result and result.returncode == 0:
-            # Check if CSV file was created
-            tag = f"mask_sac_mcad_{regime}"
-            csv_path = f"{self.workdir}/{tag}/mask_sac_mcad_{regime}.csv"
+            # Check if CSV file was created in the new exports structure
+            target_path = f"exports/{regime}/mask_sac.csv"
 
-            if os.path.exists(csv_path):
+            if os.path.exists(target_path):
                 # Get file info
-                file_size = os.path.getsize(csv_path)
-                df = pd.read_csv(csv_path)
+                file_size = os.path.getsize(target_path)
+                df = pd.read_csv(target_path)
 
-                self.log(f"Allocation history exported: {csv_path}", "SUCCESS")
+                self.log(f"Allocation history exported: {target_path}", "SUCCESS")
                 self.log(f"  - File size: {file_size/1024:.1f} KB", "INFO")
                 self.log(f"  - Records: {len(df)}", "INFO")
                 self.log(f"  - Columns: {list(df.columns)}", "INFO")
-
+                
                 return True
             else:
-                self.log(f"CSV file not found after export: {csv_path}", "ERROR")
+                self.log(f"CSV file not found after export: {target_path}", "ERROR")
                 return False
         else:
             self.log(f"Failed to export allocation history for {regime}", "ERROR")
@@ -781,8 +794,7 @@ agent = dict(
             self.log("\nGenerated Files:", "INFO")
             for regime in self.regimes:
                 if self.results["export"].get(regime, False):
-                    tag = f"mask_sac_mcad_{regime}"
-                    csv_path = f"{self.workdir}/{tag}/mask_sac_mcad_{regime}.csv"
+                    csv_path = f"exports/{regime}/mask_sac.csv"
                     if os.path.exists(csv_path):
                         self.log(f"  📊 {regime}: {csv_path}", "INFO")
 
@@ -793,6 +805,8 @@ agent = dict(
             self.log("🎉 All regimes completed successfully!", "SUCCESS")
         else:
             self.log(f"⚠️ {total_regimes - overall_success} regimes failed", "WARNING")
+
+
 
     def run_pipeline(self) -> bool:
         """Run the complete pipeline"""
@@ -1053,13 +1067,28 @@ def main():
     parser.add_argument(
         "--quick-test",
         action="store_true",
-        help="Run in quick test mode (50 episodes instead of 1000)",
+        help="Run in quick test mode (50 episodes instead of 200)",
+    )
+    parser.add_argument(
+        "--check-status",
+        type=str,
+        help="Check training status for specific regime (or 'all' for all regimes)",
     )
 
     args = parser.parse_args()
 
-    # Create and run pipeline
+    # Create pipeline
     pipeline = MaskSACMCADPipeline(quick_test=args.quick_test)
+    
+    # Handle specific commands
+    if args.check_status:
+        if args.check_status.lower() == 'all':
+            pipeline.check_training_status()
+        else:
+            pipeline.check_training_status(args.check_status)
+        return
+    
+    # Run complete pipeline
     success = pipeline.run_pipeline()
 
     sys.exit(0 if success else 1)

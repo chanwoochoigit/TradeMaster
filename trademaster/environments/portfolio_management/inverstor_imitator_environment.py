@@ -69,7 +69,7 @@ class PortfolioManagementInvestorImitatorEnvironment(Environments):
                                             map_location=torch.device('cpu'))
                 net = MLPReg(input_dim=len(self.tech_indicator_list), dims=[256], output_dim=1).cpu()
                 net.load_state_dict(indicator_dict)
-            all_dict.update({sub_file: net})
+                all_dict.update({sub_file: net})  # Move this inside the loop
         # here the self.net_2_dict is the 2 layer of dict and content is the network
         self.nets_2_dict = all_dict
         ##############################################################
@@ -451,6 +451,7 @@ class PortfolioManagementInvestorImitatorEnvironment(Environments):
             if dd > mdd:
                 mdd = dd
         cr = np.sum(daily_return) / (mdd + 1e-10)
-        sor = np.sum(daily_return) / (np.nan_to_num(np.std(neg_ret_lst), 0) + 1e-10) / (
+        neg_std = np.std(neg_ret_lst) if len(neg_ret_lst) > 0 else 0
+        sor = np.sum(daily_return) / (neg_std + 1e-10) / (
                 np.sqrt(len(daily_return)) + 1e-10)
         return tr, sharpe_ratio, vol, mdd, cr, sor

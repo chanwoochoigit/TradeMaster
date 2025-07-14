@@ -1,0 +1,22 @@
+Config (path: configs/portfolio_management/portfolio_management_mcad_sarl_sarl_adam_mse_covid.py): {'data': {'type': 'PortfolioManagementDataset', 'data_path': 'data/portfolio_management/mcad/covid', 'train_path': 'data/portfolio_management/mcad/covid/train.csv', 'valid_path': 'data/portfolio_management/mcad/covid/valid.csv', 'test_path': 'data/portfolio_management/mcad/covid/test.csv', 'tech_indicator_list': ['high', 'low', 'open', 'close', 'adjcp', 'zopen', 'zhigh', 'zlow', 'zadjcp', 'zclose', 'zd_5', 'zd_10', 'zd_15', 'zd_20', 'zd_25', 'zd_30'], 'length_day': 5, 'initial_amount': 10000, 'transaction_cost_pct': 0.001, 'test_dynamic_path': 'data/portfolio_management/mcad/covid/test_with_label.csv', 'test_dynamic': '-1'}, 'environment': {'type': 'PortfolioManagementSARLEnvironment'}, 'trainer': {'type': 'PortfolioManagementSARLTrainer', 'agent_name': 'ddpg', 'if_remove': False, 'configs': {'framework': 'tf2', 'num_workers': 0}, 'work_dir': 'work_dir/portfolio_management_mcad_sarl_sarl_adam_mse_covid', 'epochs': 200}, 'loss': {'type': 'MSELoss'}, 'optimizer': {'type': 'Adam', 'lr': 0.001}, 'task_name': 'portfolio_management', 'dataset_name': 'mcad', 'net_name': 'sarl', 'agent_name': 'sarl', 'optimizer_name': 'adam', 'loss_name': 'mse', 'regime_name': 'covid', 'work_dir': 'work_dir/portfolio_management_mcad_sarl_sarl_adam_mse_covid'}
+Traceback (most recent call last):
+  File "/Users/chanwoo_choi/projects/TradeMaster/trademaster/utils/utils.py", line 117, in build_from_cfg
+    return obj_cls(**args)
+  File "/Users/chanwoo_choi/projects/TradeMaster/trademaster/trainers/portfolio_management/sarl_trainer.py", line 75, in __init__
+    self.trainer_name = select_algorithms(self.agent_name)
+  File "/Users/chanwoo_choi/projects/TradeMaster/trademaster/trainers/portfolio_management/sarl_trainer.py", line 31, in select_algorithms
+    from ray.rllib.agents.ddpg.ddpg import DDPGTrainer as trainer
+ModuleNotFoundError: No module named 'ray.rllib.agents'
+
+During handling of the above exception, another exception occurred:
+
+Traceback (most recent call last):
+  File "/Users/chanwoo_choi/projects/TradeMaster/tools/portfolio_management/train_sarl.py", line 68, in <module>
+    main()
+  File "/Users/chanwoo_choi/projects/TradeMaster/tools/portfolio_management/train_sarl.py", line 54, in main
+    trainer = build_trainer(cfg, default_args=dict(dataset=dataset, device = device))
+  File "/Users/chanwoo_choi/projects/TradeMaster/trademaster/trainers/builder.py", line 8, in build_trainer
+    trainer = build_from_cfg(cp_cfg, TRAINERS, default_args)
+  File "/Users/chanwoo_choi/projects/TradeMaster/trademaster/utils/utils.py", line 120, in build_from_cfg
+    raise type(e)(f'{obj_cls.__name__}: {e}')
+ModuleNotFoundError: PortfolioManagementSARLTrainer: No module named 'ray.rllib.agents'

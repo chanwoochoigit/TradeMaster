@@ -1,0 +1,14 @@
+Traceback (most recent call last):
+  File "/Users/chanwoo_choi/projects/TradeMaster/tools/portfolio_management/train_deeptrader.py", line 147, in <module>
+    main()
+  File "/Users/chanwoo_choi/projects/TradeMaster/tools/portfolio_management/train_deeptrader.py", line 41, in main
+    cfg = Config.fromfile(args.config)
+  File "/opt/anaconda3/envs/trademaster/lib/python3.9/site-packages/mmcv/utils/config.py", line 340, in fromfile
+    cfg_dict, cfg_text = Config._file2dict(filename,
+  File "/opt/anaconda3/envs/trademaster/lib/python3.9/site-packages/mmcv/utils/config.py", line 252, in _file2dict
+    _cfg_dict, _cfg_text = Config._file2dict(osp.join(cfg_dir, f))
+  File "/opt/anaconda3/envs/trademaster/lib/python3.9/site-packages/mmcv/utils/config.py", line 183, in _file2dict
+    check_file_exist(filename)
+  File "/opt/anaconda3/envs/trademaster/lib/python3.9/site-packages/mmcv/utils/path.py", line 23, in check_file_exist
+    raise FileNotFoundError(msg_tmpl.format(filename))
+FileNotFoundError: file "/Users/chanwoo_choi/projects/TradeMaster/configs/_base_/datasets/portfolio_management/mcad_covid.py" does not exist
