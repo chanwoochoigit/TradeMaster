@@ -13,3 +13,5 @@
 /data_synthesis/timegan-pytorch/run.sh
 
 apex/
+
+*.log
